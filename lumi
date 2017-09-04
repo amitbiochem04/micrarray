@@ -1,0 +1,38 @@
+filelist<-c("CP27_H12_SAMPLE%20PROBE%20PROFILE_NO%20NORM_0
+10511.txt")
+##Read raw and make lumibatchobject
+data <-lumiR.batch(filelist)
+e <-(log2(exprs(data)))
+##Quantile normalize
+e.N<-lumiN( e, method="quantile")
+##Expressions
+exprs(data)=e.N
+###
+presentCount<-detectionCall(data, Th=0.05)
+sele.N1<-e.N[presentCount==20,]
+selprobeList<-rownames(sele.N1)
+probeList<-rownames(e.N)
+
+###
+if (require(lumiHumanAll.db) & require(annotate))
+{
+geneSymbol<-getSYMBOL(probeList, 'lumiHumanAll.db')
+selgeneSymbol<-getSYMBOL(selprobeList, 'lumiHumanAll.db')
+selgeneSymbol<-getSYMBOL(selprobeList, 'lumiHumanAll.db')
+EntrezID<-sapply(lookUp(probeList, 'lumiHumanAll.db', 'ENTREZID'), function(x) x[1])
+selgeneName<-sapply(lookUp(selprobeList, 'lumiHumanAll.db', 'GENENAME'), function(x) x[1])
+}
+e.Nsel=e.N[rownames(e.N) %in% selprobeList,];dim(e.Nsel)
+des=read.table("Design.txt", sep="\t", header=T);
+head(des)
+des=des[,1:7];
+des=des[order(des$SampleID),];
+des$SampleID== colnames(e.Nsel)
+#YES, otherwise order e.Nselcolumns by colnames
+TumorType=as.factor(des$TumorType);
+Patient=as.factor(des$Patient);
+tp=model.matrix(~-1+TumorType+Patient);
+tp
+fit1 <-lmFit(e.Nsel,design=tp)
+####
+https://sites.tufts.edu/cbi/files/2014/11/BioConductor-and-Rf.pdf
