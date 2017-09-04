@@ -1,6 +1,6 @@
 source(“http://bioconductor.org/biocLite.R&#8221;)
 biocLite(c(“lumi”, “limma”, “illuminaHumanv4.db”)
-
+###https://jimmyview.wordpress.com/2016/04/27/illumina-microarray-analysis-with-r-a-newbie-tutorial/
 Load the libraries:
 
 library(lumi)
