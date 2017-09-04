@@ -1,0 +1,94 @@
+source(“http://bioconductor.org/biocLite.R&#8221;)
+biocLite(c(“lumi”, “limma”, “illuminaHumanv4.db”)
+
+Load the libraries:
+
+library(lumi)
+library(limma)
+library(illuminaHumanv4.db)
+dataFile = “Sample Probe Profile.txt”
+
+####
+#In RStudio, under the Files frame, go to the folder where you keep your microarray data, 
+#click More -> Set As Working Directory
+#Load your “Sample Probe Profile.txt” into R.
+
+#####
+array.lumi = lumiR(dataFile, sep = NULL, detectionTh = 0.01, na.rm = TRUE, convertNuID = TRUE,
+lib.mapping = NULL, dec = ‘.’, parseColumnName = FALSE, checkDupId = TRUE, QC = TRUE, 
+columnNameGrepPattern = list(exprs=’AVG_Signal’, se.exprs=’BEAD_STDERR’, detection=’Detection Pval’, 
+beadNum=’Avg_NBEADS’), inputAnnotation=TRUE, annotationColumn=c(‘ACCESSION’, ‘SYMBOL’, 
+‘PROBE_SEQUENCE’, ‘PROBE_START’, ‘CHROMOSOME’, ‘PROBE_CHR_ORIENTATION’, ‘PROBE_COORDINATES’, ‘DEFINITION’), verbose = TRUE)
+####
+#Step 3. Now we use the lumi package to do the log2 conversion and normalization. 
+#Then we run QC and see if any samples are outliers. 
+#If they are, you have to go back to the excel file and delete them.
+####
+dataT <- lumiT(array.lumi)
+dataN <- lumiN(dataT)
+plot(dataN, what=”boxplot”)
+plot(dataN, what=”cv”)
+plot(dataN, what=”density”)
+plot(dataN, what=”pair”)
+plot(dataN, what=”MA”)
+plot(dataN, what=”sampleRelation”)
+######
+if everything looks ok, great, you have your sample successfully loaded into R.
+
+Step 4. Create a targets.txt file. Open up excel, and make something like this, 
+where FileName is basically the name of the sample that you ran on the chip.
+In my case, I have 2 variables, a condition and a treatment variable. Yours could just be 
+####
+eset <- dataN
+targets = readTargets(“targets.txt”)
+TS <- paste(targets$Condition, targets$Treatment, sep=”.”)
+TS <- factor(TS, levels=c(“R.R”,”R.I”,”NR.R”,”NR.I”))
+design <- model.matrix(~0+TS)
+colnames(design) <- levels(TS)
+fit <- lmFit(eset, design)
+###
+ont.matrix <- makeContrasts(RIvsRR=R.I-R.R, NRIvsNRR=NR.I-NR.R, RvsNR=(R.I-R.R)-(NR.I-NR.R), levels=design)
+
+Here, you define what you want to compare. For me, I want to find differences between R.I and R.R, hence I write it as RIvsRR=R.I-R.R. Its pretty intuitive like math formula. You can even use brackets like RvsNR=(R.I-R.R)-(NR.I-NR.R). After the contrast matrix, you continue with these codes, which ultimately will yield a Venn Diagram depicting overlaps in genes.
+
+fit2 <- contrasts.fit(fit, cont.matrix)
+fit2 <- eBayes(fit2)
+results <- decideTests(fit2)
+vennDiagram(results)
+
+Step 5. The final step. Is the extraction of data so you can continue to process them for whatever you want, i.e. IPA, GSEA, heatmap, GO…. To export the genes with p<0.05. The number correspond to the order in which I setup my contrast matrix. Hence 1 = RIvsRR; 2=NRIvsNRR; and 3=RvsNR.
+
+coef1 = topTable(fit2, coef=1, number=1000000)
+coef1f=coef1[coef1$P.Value<0.05,]
+eset1 <- eset[coef1f$SYMBOL,]
+write.table(eset1, “eset1.txt”, sep=”\t”)
+
+coef2 = topTable(fit2, coef=2, number=1000000)
+coef2f=coef2[coef2$P.Value<0.05,]
+eset2 <- eset[coef2f$SYMBOL,]
+write.table(eset2, “eset2.txt”, sep=”\t”)
+
+coef3 = topTable(fit2, coef=3, number=1000000)
+coef3f=coef3[coef3$P.Value<0.05,]
+eset3 <- eset[coef3f$SYMBOL,]
+write.table(eset3, “eset3.txt”, sep=”\t”)
+
+Next to extract Venn Diagram genes. To get all the genes from contrast 1, e.g. all significant genes in RIvsRR
+
+Iv = which(results[,1]!=0)
+write.table(Iv, “RIvsRR.txt”, sep=”\t”)
+
+To get intersect between contrast 1 and contrast 3; e.g. genes that changed in both RIvsRR and RvsNR.
+
+Iv = which(results[,1]!=0 & results[,3]!=0)
+write.table(Iv, “RIvsRR intersect RvsNR.txt”, sep=”\t”)
+
+To get genes changes only in contrast 3; e.g. unique genes that changed in RvsNR.
+
+Iv = which(results[,1]==0 & results[,2]==0 & results[,3]!=0)
+write.table(Iv, “RvsNR only.txt”, sep=”\t”)
+
+
+
+
+
